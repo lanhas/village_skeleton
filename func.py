@@ -214,11 +214,4 @@ def dilate_iter(image,villageMask, iter_num: int, kernelSize):
     imgs.reverse()
     return imgs
 
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    dem_dbs = Image.open(r'utils\imgaug\data\shan.jpg')
-    box = (0, 0, 400, dem_dbs.size[1])
-    result = dem_dbs.crop(box)
-    print(result.size)
-    result.show()
 
