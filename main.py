@@ -8,7 +8,7 @@ if __name__ == "__main__":
     axistrans = AxisTrans()
     axistrans.setWindowTitle('村落骨架提取')
     icon = QIcon()
-    icon.addPixmap(QPixmap('resource/glass.png'))
+    icon.addPixmap(QPixmap('function/axis_trans/resource/glass.png'))
     axistrans.setWindowIcon(icon)
     axistrans.show()
     sys.exit(app.exec_())

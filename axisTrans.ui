@@ -183,6 +183,7 @@
     </property>
     <addaction name="action_openfile"/>
     <addaction name="action_openOutline"/>
+    <addaction name="action_addDem"/>
     <addaction name="separator"/>
     <addaction name="action_saveImg"/>
     <addaction name="separator"/>
@@ -194,16 +195,12 @@
     </property>
     <addaction name="action_cleanImg"/>
     <addaction name="action_cleanOutline"/>
+    <addaction name="action_parameters"/>
    </widget>
    <widget class="QMenu" name="menu_3">
     <property name="title">
      <string>视图(V)</string>
     </property>
-    <addaction name="action_changePenColor"/>
-    <addaction name="action_changeAreaColor"/>
-    <addaction name="action_bgDiaph"/>
-    <addaction name="action_kernelSize"/>
-    <addaction name="action_iterNum"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
@@ -214,6 +211,15 @@
     <property name="title">
      <string>图像(I)</string>
     </property>
+    <widget class="QMenu" name="menu_5">
+     <property name="title">
+      <string>高程计算</string>
+     </property>
+     <addaction name="action_slope"/>
+     <addaction name="action_curvature"/>
+     <addaction name="action_slopeDivide"/>
+    </widget>
+    <addaction name="menu_5"/>
     <addaction name="action_extractColor"/>
    </widget>
    <widget class="QMenu" name="menu_W">
@@ -244,31 +250,6 @@
     <string>清空标记</string>
    </property>
   </action>
-  <action name="action_changePenColor">
-   <property name="text">
-    <string>画笔颜色</string>
-   </property>
-  </action>
-  <action name="action_changeAreaColor">
-   <property name="text">
-    <string>区域颜色</string>
-   </property>
-  </action>
-  <action name="action_bgDiaph">
-   <property name="text">
-    <string>背景透明度</string>
-   </property>
-  </action>
-  <action name="action_kernelSize">
-   <property name="text">
-    <string>核大小</string>
-   </property>
-  </action>
-  <action name="action_iterNum">
-   <property name="text">
-    <string>迭代次数</string>
-   </property>
-  </action>
   <action name="action_openOutline">
    <property name="text">
     <string>添加轮廓线</string>
@@ -292,6 +273,31 @@
   <action name="action_extractColor">
    <property name="text">
     <string>取色</string>
+   </property>
+  </action>
+  <action name="action_addDem">
+   <property name="text">
+    <string>添加高程数据</string>
+   </property>
+  </action>
+  <action name="action_slope">
+   <property name="text">
+    <string>坡度计算</string>
+   </property>
+  </action>
+  <action name="action_curvature">
+   <property name="text">
+    <string>曲率计算</string>
+   </property>
+  </action>
+  <action name="action_parameters">
+   <property name="text">
+    <string>参数设置</string>
+   </property>
+  </action>
+  <action name="action_slopeDivide">
+   <property name="text">
+    <string>坡度阈值划分</string>
    </property>
   </action>
  </widget>
@@ -460,86 +466,6 @@
    </hints>
   </connection>
   <connection>
-   <sender>action_bgDiaph</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>bgDiaph()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>604</x>
-     <y>413</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>action_iterNum</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>iterNum()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>604</x>
-     <y>413</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>action_changePenColor</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>penColor()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>604</x>
-     <y>413</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>action_changeAreaColor</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>areaColor()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>604</x>
-     <y>413</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>action_kernelSize</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>kernelSize()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>604</x>
-     <y>413</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>action_openOutline</sender>
    <signal>triggered()</signal>
    <receiver>MainWindow</receiver>
@@ -619,6 +545,86 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>action_parameters</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>paraSetting()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>596</x>
+     <y>401</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>action_addDem</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>add_elevationData()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>596</x>
+     <y>401</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>action_curvature</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>calCurvature()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>596</x>
+     <y>401</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>action_slopeDivide</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slopeDivide()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>596</x>
+     <y>401</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>action_slope</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>calSlope()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>596</x>
+     <y>401</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>show_oriImg()</slot>
@@ -632,15 +638,16 @@
   <slot>cleanLine()</slot>
   <slot>drow_road()</slot>
   <slot>offset_calculate()</slot>
-  <slot>penColor()</slot>
-  <slot>areaColor()</slot>
-  <slot>kernelSize()</slot>
-  <slot>iterNum()</slot>
-  <slot>bgDiaph()</slot>
   <slot>openOutline()</slot>
   <slot>extractColor()</slot>
   <slot>cleanImg()</slot>
   <slot>quit()</slot>
   <slot>saveImg()</slot>
+  <slot>update_parameters()</slot>
+  <slot>calSlope()</slot>
+  <slot>calCurvature()</slot>
+  <slot>slopeDivide()</slot>
+  <slot>add_elevationData()</slot>
+  <slot>paraSetting()</slot>
  </slots>
 </ui>

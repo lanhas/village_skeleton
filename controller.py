@@ -1,8 +1,10 @@
 import time
 import numpy as np
-from numpy.lib.type_check import imag
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtCore import pyqtSignal
 from axisTrans import Ui_MainWindow as axisTransWindow
 from skimage.morphology import medial_axis, skeletonize
+from parameters import Ui_Form as paraWindow
 from func import *
 
 
@@ -17,21 +19,35 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         # 初始化
         self.originalImg = None     # 原始图像
         self.villageMask = None     # 村落掩膜，通过村落边界或山水轮廓线获得的村落区域
+        self.pixmap = None          # 显示在qlabel中的pixmap图
+        self.slopeImg = None        # 坡度图
+        self.curvatureImg = None    # 曲率图
+        self.slopeDivided = None    # 坡度小于坡度阈值的区域
+        self.elevationData = None   # 村落高程数据，用于辅助中轴线生成
         self.outlineImg = None      # 带有村落边界线的图像，用于确定村落区域
         self.resultImg = None       # 结果图像，融合骨架线和原始图像后的结果
         self.outlinePix = None      # 绘制村落边界线的中间过程图像
         self.skPix = None           # 骨架线的中间过程图像
+        self.img_name = None        # 图片名
+        self.showing_pixmap = None     # 正在label中显示的图片
+        # 默认参数
+        self.gradWe = 0.53     # dem格网宽度，0.53米/像素
+        self.gradSn = 0.53     # dem格网高度，0.53米/像素
+        self.slope_threshold = 15       # 坡度阈值
+        self.kernelSize = 15     # 核大小 
+        self.iterNum = 10       # 迭代次数
+        self.sleepTime = 0.0001      # 控制动态显示的间隔时间
         # 画笔颜色
         self.contourPenCol = QColor('#FF0000')      # 轮廓线，默认为红色
         self.roadPenCol = QColor('#33FFFF')         # 道路线，默认为蓝色
         # 轴线三通道值
-        self.axisColor = (255, 165, 0)              # 轴线颜色，默认为橙色
+        self.axisColor = colorDict['橙色']       # 轴线颜色，默认为橙色
+        self.axisWidth = 7                          # 轴线宽度
         # 边界线颜色
         self.outlineColor = OutlineColor.red        # 边界线提取时的默认颜色，默认为红色
-        # 核大小、迭代次数、显示的时间间隔
-        self.kernelSize = 8         
-        self.iterNum = 13
-        self.sleepTime = 0.02       # 控制动态显示的间隔时间
+        self.paraWindow = ParaWindow(self.gradSn, self.gradWe, self.kernelSize, self.iterNum, 
+                self.slope_threshold, self.sleepTime, self.contourPenCol, self.roadPenCol, self.axisColor, self.axisWidth, self.outlineColor)
+        self.paraWindow.para_commit.connect(self.update_parameters)
 
     def open_file(self):
         """
@@ -39,16 +55,24 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         """
         self.eventType = EventType.noneType
         try:
-            fname ,_ = QFileDialog.getOpenFileName(self,'Open File','function/axis_trans/data',
+            fname ,_ = QFileDialog.getOpenFileName(self,'Open File','function/axis_trans/data/黔东南6个村子宜居区域15度',
                                                     'Image files (*.jpg *.tif *.tiff *.png *.jpeg)')
             if fname != '':
                 image = Image.open(fname)
-                image = image.resize((self.label.width(), self.label.height()))
+                self.img_name = Path(fname).stem
+                # 将图片按照原始比例显示在label
+                self.label_show(image)
+                self.label.setMinimumSize(1, 1)
+                self.label.installEventFilter(self)
                 self.originalImg = image
-                self.label.setPixmap(pil2pixmap(image))
+                # temp code start
+                self.eventType = EventType.loadOutline
+                self.outlineImg = image
+                # temp code end
                 self.empty_result()
         except Exception as e:
             QMessageBox.warning(self, '提示', '打开图片失败，请检查图片类型和图片大小！', QMessageBox.Ok)
+            print(e)
 
     def openOutline(self):
         """
@@ -64,12 +88,28 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                                                         'Image files (*.jpg *.tif *.tiff *.png *.jpeg)')
                 if fname != '':
                     image = Image.open(fname)
+                    self.label_show(image)
                     self.outlineImg = image
-                    imgShow = image.copy().resize((self.label.width(), self.label.height()))
-                    self.label.setPixmap(pil2pixmap(imgShow))
                     self.empty_result()
         except Exception as e:
             QMessageBox.warning(self, '提示', '打开轮廓线失败，请检查图片类型和图片大小！', QMessageBox.Ok)
+
+    def add_elevationData(self):
+        """
+        添加高程数据
+        """
+        self.eventType = EventType.noneType
+        try:
+            fname ,_ = QFileDialog.getOpenFileName(self,'Open elevation File','function/axis_trans/data',
+                                                    'Image files (*.jpg *.tif *.tiff *.png *.jpeg)')
+            if fname != '':
+                image = Image.open(fname)
+                image = tif2bmp(image)
+                self.label_show(image)
+                self.elevationData = image
+                self.empty_result()
+        except:
+            QMessageBox.warning(self, '提示', '打开高程数据失败，请检查图片类型和图片大小！', QMessageBox.Ok)
 
     def show_oriImg(self):
         """
@@ -79,7 +119,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         if self.originalImg is None:
             QMessageBox.warning(self, '提示', '显示原图失败，请重新加载！', QMessageBox.Ok)
         else:
-            self.label.setPixmap(pil2pixmap(self.originalImg))
+            self.label_show(self.originalImg)
 
     def draw_outline(self):
         """
@@ -96,7 +136,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
 
     def extract_village(self):
         """
-        通过加载的村落边界先或手绘的边界线提取出村落
+        通过加载的村落边界或手绘的边界线提取出村落
         """
         # 如果是手绘边界线的话
         if self.eventType == EventType.drawOutline:
@@ -118,7 +158,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                 image = np.array(self.originalImg, dtype=np.uint8)
                 result = image_blend(image, self.villageMask, 1, 0.6, 0)
                 result = Image.fromarray(result)
-                self.label.setPixmap(pil2pixmap(result))
+                self.label_show(result)
                 self.empty_result()
             except Exception as e:
                 QMessageBox.warning(self, '提示', '未知错误\n{}'.format(e), QMessageBox.Ok)
@@ -132,6 +172,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                 self.eventType = EventType.noneType
                 try:
                     # 根据边界线颜色提取边界线
+
                     image = np.array(self.outlineImg, np.uint8)
                     outlineMask = getOutlineMask(image, self.outlineColor)
                     # 查找轮廓
@@ -150,14 +191,13 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                         villageMask = cv2.erode(villageMask, kernel)
                         villageMask = cv2.dilate(villageMask, kernel)
                         # 将村落掩码resize到label大小
-                        villageMask = cv2.resize(villageMask, (self.label.width(), self.label.height()))
                         villageMask[villageMask > 0] = 1
                         self.villageMask = villageMask
                         # 融合
                         image = np.array(self.originalImg, dtype=np.uint8)
                         result = image_blend(image, self.villageMask, 1, 0.6, 0)
                         result = Image.fromarray(result)
-                        self.label.setPixmap(pil2pixmap(result))
+                        self.label_show(result)
                         self.empty_result()
                 except Exception as e:
                     QMessageBox.warning(self, '提示', '未知错误\n{}'.format(e), QMessageBox.Ok)
@@ -171,7 +211,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         if self.midAxis is None:
             if self.villageMask is None:
                 # 未找到村落区域，则加载原图
-                self.label.setPixmap(pil2pixmap(self.originalImg))
+                self.label_show(self.originalImg)
                 QMessageBox.warning(self, '提示', '未找到村落区域！', QMessageBox.Ok)
             else:
                 skel, distance = medial_axis(self.villageMask, return_distance=True)
@@ -180,7 +220,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                 result = self.dynamic_showResult(dist_on_skel)
                 self.midAxis = result
         else:
-            self.label.setPixmap(pil2pixmap(self.midAxis))
+            self.label_show(self.midAxis)
             self.resultImg = self.midAxis
 
     def skletonize1(self):
@@ -192,7 +232,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         if self.sk1 is None:
             if self.villageMask is None:
                 # 未找到村落区域，则加载原图
-                self.label.setPixmap(pil2pixmap(self.originalImg))
+                self.label_show(self.originalImg)
                 QMessageBox.warning(self, '提示', '未找到村落区域！', QMessageBox.Ok)
             else:
                 skeleton = skeletonize(self.villageMask)
@@ -200,7 +240,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                 result = self.dynamic_showResult(skeleton)
                 self.sk1 = result
         else:
-            self.label.setPixmap(pil2pixmap(self.sk1))
+            self.label_show(self.sk1)
             self.resultImg = self.sk1
             
     def skletonize2(self):
@@ -212,7 +252,7 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         if self.sk2 is None:
             if self.villageMask is None:
                 # 未找到村落区域，则加载原图
-                self.label.setPixmap(pil2pixmap(self.originalImg))
+                self.label_show(self.originalImg)
                 QMessageBox.warning(self, '提示', '未找到村落区域！', QMessageBox.Ok)
             else:
                 skeleton_lee = skeletonize(self.villageMask, method='lee')
@@ -220,20 +260,28 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
                 result = self.dynamic_showResult(skeleton_lee)
                 self.sk2 = result
         else:
-            self.label.setPixmap(pil2pixmap(self.sk2))
+            self.label_show(self.sk2)
             self.resultImg = self.sk2
+
+    def label_show(self, image):
+        """
+        将image显示在label中，保留图片的长宽比
+        """
+        pixmap = pil2pixmap(image)
+        self.label.setPixmap(pixmap.scaled(self.label.size(), aspectRatioMode=Qt.KeepAspectRatio, transformMode = Qt.SmoothTransformation))
+        self.showing_pixmap = pixmap
 
     def dynamic_showResult(self, skeleton):
         """
         将提取结果进行动态显示
         """
-        image_list = dilate_iter(skeleton, self.villageMask, self.iterNum, self.kernelSize)
+        image_list = dilate_iter(skeleton, self.villageMask, self.iterNum, self.kernelSize, self.axisWidth)
         for im in image_list:
             image = np.array(self.originalImg, dtype=np.uint8)
             result = img_addition(image, im, self.axisColor)
             result = image_blend(result, self.villageMask, 1, 0.6, 0)
             result = Image.fromarray(result)
-            self.label.setPixmap(pil2pixmap(result))
+            self.label_show(result)
             QApplication.processEvents()
             time.sleep(self.sleepTime)
         self.resultImg = result
@@ -297,6 +345,18 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         提取鼠标所点击位置的颜色
         """
         self.eventType = EventType.extractColor
+
+    def eventFilter(self, source, event) -> bool:
+        """
+        lsbel resize事件
+        """
+        if (source is self.label and event.type() == QtCore.QEvent.Resize):
+        # re-scale the pixmap when the label resizes
+            if self.showing_pixmap is not None:
+                self.label.setPixmap(self.showing_pixmap.scaled(
+                    self.label.size(), QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation))
+        return super(AxisTrans, self).eventFilter(source, event)
 
     def mousePressEvent(self, event) :
         """
@@ -476,12 +536,57 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         if self.resultImg is None:
             QMessageBox.warning(self, "提示", "无结果！", QMessageBox.Ok)
         else:
-            fname, ftype = QFileDialog.getSaveFileName(self, '保存图片', 'axis_trans/result', 'Image files (*.jpg *.png *.jpeg)')
+            fname, ftype = QFileDialog.getSaveFileName(self, '保存图片', 'function/axis_trans/data/黔东南6个村子宜居区域15度/结果/{}'.format(self.img_name), 'Image files (*.jpg *.png *.jpeg)')
             if fname[0] is not None:
                 self.resultImg.save(fname, quality=95)
                 QMessageBox.warning(self, "提示", "保存成功！", QMessageBox.Ok)
             else:
                 QMessageBox.warning(self, "提示", "保存失败，请重试！", QMessageBox.Ok)
+
+    def paraSetting(self):
+        """
+        参数设置
+        """
+        self.paraWindow.show()
+    
+    def calSlope(self):
+        """
+        坡度计算
+        """
+        if self.elevationData is not None:
+            image = np.array(self.elevationData)
+            self.slopeImg = cal_slope(image, self.gradWe, self.gradSn)
+            res = Image.fromarray(self.slopeImg)
+            self.label_show(res)
+            # self.label.setPixmap(pil2pixmap(res))
+        else:
+            QMessageBox.warning(self, '提示', '未找到高程数据，请先加载数据！', QMessageBox.Ok)
+
+    def calCurvature(self):
+        """
+        曲率计算
+        """
+        if self.elevationData is not None:
+            image = np.array(self.elevationData, dtype=np.uint8)
+            res = cal_curvature(image)
+            self.curvatureImg = Image.fromarray(res)
+            self.label.setPixmap(pil2pixmap(self.curvatureImg))
+        else:
+            QMessageBox.warning(self, '提示', '未找到高程数据，请先加载数据！', QMessageBox.Ok)
+
+    def slopeDivide(self):
+        """
+        根据坡度阈值，划分区域
+        """
+        if self.slopeImg is not None:
+            mask = np.zeros_like(self.slopeImg, dtype=np.uint8)
+            mask[self.slopeImg < self.slope_threshold] = 1
+            self.slopeDivided = mask
+            res = image_blend(np.array(self.originalImg), mask, 1, 0.4, 0)
+            res = Image.fromarray(res)
+            self.label.setPixmap(pil2pixmap(res))
+        else:
+            QMessageBox.warning(self, '提示', '未找到坡度图，请先计算坡度！', QMessageBox.Ok)
 
     def empty_result(self):
         """
@@ -491,18 +596,73 @@ class AxisTrans(BaseMainWindow, axisTransWindow):
         self.im_contour = None
         self.sk1 = None
         self.sk2 = None
-
-    def iterNum(self):
-        pass
-
-    def penColor(self):
-        pass
-
-    def areaColor(self):
-        pass
-
-    def bgDiaph(self):
-        pass
     
-    def kernelSize(self):
-        pass
+    def update_parameters(self):
+        """
+        更新参数
+        """
+        self.gradSn = self.paraWindow.gradSn
+        self.gradWe = self.paraWindow.gradWe
+        self.kernelSize = self.paraWindow.kernelSize
+        self.iterNum = self.paraWindow.iterNum
+        self.slope_threshold = self.paraWindow.slope_threshold
+        self.sleepTime = self.paraWindow.sleepTime
+        self.contourPenCol = self.paraWindow.contourPenCol
+        self.roadPenCol = self.paraWindow.roadPenCol
+        self.axisColor = self.paraWindow.axisColor
+        self.axisWidth = self.paraWindow.axisWidth
+        self.outlineColor = self.paraWindow.outlineColor
+    
+class ParaWindow(QWidget, paraWindow):
+    para_commit = pyqtSignal()
+    def __init__(self, gradSn, gradWe, kernelSize, iterNum, 
+                slope_threshold, sleepTime, contourPenCol, roadPenCol, axisColor, axisWidth, outlineColor) -> None:
+        super(ParaWindow, self).__init__()
+        self.setupUi(self)
+        self.gradSn = gradSn
+        self.gradWe = gradWe
+        self.kernelSize = kernelSize
+        self.iterNum = iterNum
+        self.slope_threshold = slope_threshold
+        self.sleepTime = sleepTime
+        self.contourPenCol = contourPenCol
+        self.roadPenCol = roadPenCol
+        self.axisColor = axisColor
+        self.axisWidth = axisWidth
+        self.outlineColor = outlineColor
+
+    def commit(self):
+        """
+        提交修改信息
+        """
+        self.gradSn = float(self.lineEdit_gradSn.text())
+        self.gradWe = float(self.lineEdit_gradWe.text())
+        self.kernelSize = int(self.lineEdit_kernelSize.text())
+        self.iterNum = int(self.lineEdit_iterNum.text())
+        self.sleepTime = float(self.lineEdit_sleepTime.text())
+        self.slope_threshold = float(self.lineEdit_slopeThreshold.text())
+
+        self.contourPenCol = QColor(*colorDict[self.comboBox_outlineColor.currentText()])
+        self.roadPenCol = QColor(*colorDict[self.comboBox_contourPenCol.currentText()])
+        self.axisColor = colorDict[self.comboBox_axisColor.currentText()]
+        self.axisWidth = int(self.comboBox_axisWidth.currentText())
+        self.outlineColor = OutlineColor[Zhcn2ColorDict[self.comboBox_roadPenCol.currentText()]]
+
+        # 发送提交信号
+        self.para_commit.emit()
+    
+    def reset(self):
+        """
+        恢复默认设置
+        """
+        self.lineEdit_gradSn.setText('0.53')
+        self.lineEdit_gradWe.setText('0.53')
+        self.lineEdit_kernelSize.setText('8')
+        self.lineEdit_iterNum.setText('13')
+        self.lineEdit_sleepTime.setText('0.02')
+        self.lineEdit_slopeThreshold.setText('9')
+        self.comboBox_outlineColor.setCurrentText('红色')
+        self.comboBox_contourPenCol.setCurrentText('红色')
+        self.comboBox_axisColor.setCurrentText('橙色')
+        self.comboBox_axisWidth.setCurrentText('2')
+        self.comboBox_roadPenCol.setCurrentText('蓝色')
